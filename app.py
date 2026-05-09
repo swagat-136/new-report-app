@@ -8,7 +8,7 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from logic import evaluate_result, generate_interpretation
-from database import init_db, SessionLocal, PatientDB, ReportDB, TestResultDB, TestConfigDB, TestParameterDB, UserDB, AuditLogDB, InvoiceDB, AIJobDB, DocumentDB, ChatContextDB, hash_password
+from database import init_db, SessionLocal, PatientDB, ReportDB, TestResultDB, TestConfigDB, TestParameterDB, UserDB, AuditLogDB, InvoiceDB, AIJobDB, DocumentDB, ChatContextDB, hash_password, verify_password
 from models import PatientSchema
 from pdf_generator import create_pdf
 from ai_service import generate_ai_report_draft, extract_data_from_document, chat_with_patient_bot, chat_with_staff_rag, generate_smart_triage_alerts, generate_analytics_insights
@@ -363,7 +363,7 @@ def check_auth():
                             db = SessionLocal()
                             try:
                                 user = db.query(UserDB).filter(UserDB.username == username).first()
-                                if user and user.password_hash == hash_password(password):
+                                if user and verify_password(password, user.password_hash):
                                     st.session_state.authenticated = True
                                     st.session_state.user_id = user.id
                                     st.session_state.user_role = user.role
@@ -1080,12 +1080,19 @@ def render_idp_module():
     doc_type = st.selectbox("Document Type", ["PRESCRIPTION", "LEGACY_REPORT"])
     
     if uploaded_file and st.button("Process Document with AI", type="primary"):
-        with st.spinner("Extracting data via OCR & LLM..."):
-            file_path = f"temp_{uploaded_file.name}"
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+        # File Validation: Max 5MB limit
+        if uploaded_file.size > 5 * 1024 * 1024:
+            st.error("File size exceeds the 5MB maximum limit. Please upload a smaller file.")
+        else:
+            with st.spinner("Extracting data via OCR & LLM..."):
+                # Sanitize filename to prevent path traversal
+                safe_name = "".join(c for c in uploaded_file.name if c.isalnum() or c in "._- ")
+                file_path = f"temp_{safe_name}"
                 
-            ai_output = extract_data_from_document(file_path, doc_type)
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                    
+                ai_output = extract_data_from_document(file_path, doc_type)
             
             db = SessionLocal()
             try:

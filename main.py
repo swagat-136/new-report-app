@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from database import init_db, SessionLocal, PatientDB, UserDB, ReportDB, TestResultDB, TestConfigDB, TestParameterDB, InvoiceDB, AIJobDB, hash_password
+from database import init_db, SessionLocal, PatientDB, UserDB, ReportDB, TestResultDB, TestConfigDB, TestParameterDB, InvoiceDB, AIJobDB, hash_password, verify_password
 from typing import List, Dict, Any
 from datetime import datetime
 import json
@@ -87,7 +87,7 @@ def get_patient_reports(uhid: str, db: SessionLocal = Depends(get_db)):
 @app.post("/api/staff/login")
 def staff_login(req: StaffLoginRequest, db: SessionLocal = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.username == req.username).first()
-    if not user or user.password_hash != hash_password(req.password):
+    if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
         
     return {
@@ -103,7 +103,7 @@ def staff_login(req: StaffLoginRequest, db: SessionLocal = Depends(get_db)):
 @app.post("/api/doctor/login")
 def doctor_login(req: StaffLoginRequest, db: SessionLocal = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.username == req.username).first()
-    if not user or user.password_hash != hash_password(req.password):
+    if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     if user.role != "Pathologist":

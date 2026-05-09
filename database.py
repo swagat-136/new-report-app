@@ -1,11 +1,23 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime, Boolean, event
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 import hashlib
+import bcrypt
+import os
 from data import REFERENCE_DB
 
 DATABASE_URL = "sqlite:///./pathology.db"
+# Use check_same_thread=False since FastAPI/Streamlit uses multiple threads
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -132,8 +144,18 @@ class AuditLogDB(Base):
     details = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password: str) -> str:
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except ValueError:
+        # Fallback for older SHA256 hashes
+        import hashlib
+        return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -141,11 +163,16 @@ def init_db():
     try:
         # Seed users if empty
         if db.query(UserDB).count() == 0:
+            admin_pass = os.environ.get("ADMIN_PASSWORD", "admin123")
+            patho_pass = os.environ.get("PATHO_PASSWORD", "patho123")
+            tech_pass = os.environ.get("TECH_PASSWORD", "tech123")
+            rec_pass = os.environ.get("RECEPTION_PASSWORD", "rec123")
+
             users = [
-                UserDB(username="admin", password_hash=hash_password("admin123"), role="Admin", name="System Admin"),
-                UserDB(username="patho", password_hash=hash_password("patho123"), role="Pathologist", name="Dr. Bimala Mishra"),
-                UserDB(username="tech", password_hash=hash_password("tech123"), role="Technician", name="Lab Tech 1"),
-                UserDB(username="reception", password_hash=hash_password("rec123"), role="Receptionist", name="Front Desk")
+                UserDB(username="admin", password_hash=hash_password(admin_pass), role="Admin", name="System Admin"),
+                UserDB(username="patho", password_hash=hash_password(patho_pass), role="Pathologist", name="Dr. Bimala Mishra"),
+                UserDB(username="tech", password_hash=hash_password(tech_pass), role="Technician", name="Lab Tech 1"),
+                UserDB(username="reception", password_hash=hash_password(rec_pass), role="Receptionist", name="Front Desk")
             ]
             db.add_all(users)
             db.commit()
