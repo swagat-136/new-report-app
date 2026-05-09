@@ -119,4 +119,7 @@ def create_pdf(patient_data, selected_test, report_data, interpretations):
         pdf.set_x(10)
         pdf.multi_cell(190, 6, txt=f"* {clean_text}")
         
-    return pdf.output()
+    out = pdf.output(dest="S")
+    if isinstance(out, str):
+        return out.encode("latin-1")
+    return out
