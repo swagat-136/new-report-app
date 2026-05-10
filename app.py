@@ -572,7 +572,7 @@ def render_patient_dashboard():
                             })
                             
                         df_res = pd.DataFrame(res_data)
-                        styled_res = df_res.style.applymap(color_status, subset=['Status'])
+                        styled_res = df_res.style.map(color_status, subset=['Status'])
                         st.dataframe(styled_res, use_container_width=True, hide_index=True)
                         
                         if rep.status == "Approved":
@@ -669,7 +669,7 @@ def render_approval_workflow():
                     })
                 
                 df_res = pd.DataFrame(res_data)
-                styled_res = df_res.style.applymap(color_status, subset=['Status'])
+                styled_res = df_res.style.map(color_status, subset=['Status'])
                 st.dataframe(styled_res, use_container_width=True, hide_index=True)
                 
                 # Fetch AI Job for Human-in-the-Loop review
@@ -1069,7 +1069,7 @@ def render_new_report():
                 use_container_width=True
             )
         
-        styled_df = df_report.style.applymap(color_status, subset=['Status'])
+        styled_df = df_report.style.map(color_status, subset=['Status'])
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
 def render_idp_module():
